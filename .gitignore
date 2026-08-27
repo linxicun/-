@@ -1,0 +1,18 @@
+# ===== 敏感数据: 切勿上传 =====
+# B站登录凭证(SESSDATA/bili_jct)与本地知识库数据
+bili-data/
+config.json
+
+# ===== 个人学习资料(本仓库覆盖 D:\学习 整个目录, 不要 add -A) =====
+作业/
+51/
+*.pdf
+
+# ===== 通用忽略 =====
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+node_modules/

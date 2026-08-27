@@ -1,0 +1,20 @@
+{
+  "name": "bili-local",
+  "interface": {
+    "displayName": "B站知识库（本地分享）"
+  },
+  "plugins": [
+    {
+      "name": "bilibili-manager",
+      "source": {
+        "source": "local",
+        "path": "./plugins/bilibili-manager"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
