@@ -1261,6 +1261,9 @@ _MINDMAP_HTML = """<!DOCTYPE html>
   #bar input { flex:1; max-width:340px; height:30px; border:1px solid #d5d9de; border-radius:6px; padding:0 10px;
                font-size:13px; outline:none; }
   #bar input:focus { border-color:#FB7299; }
+  #bar .btns { display:flex; gap:6px; }
+  #bar button { height:30px; padding:0 12px; border:1px solid #d5d9de; border-radius:6px; background:#fff; color:#444; font-size:12px; cursor:pointer; }
+  #bar button:hover { border-color:#FB7299; color:#FB7299; }
   #wrap { position:fixed; top:52px; left:0; right:0; bottom:34px; overflow:hidden; cursor:grab; }
   #wrap.drag { cursor:grabbing; }
   svg { width:100%; height:100%; display:block; }
@@ -1283,11 +1286,12 @@ _MINDMAP_HTML = """<!DOCTYPE html>
 <div id="bar">
   <span class="t">__TITLE__</span>
   <span class="s" id="stats"></span>
+  <span class="btns"><button id="fit" type="button">适应窗口</button></span>
   <input id="q" type="text" placeholder="搜索视频/话题/UP主… Enter 定位">
 </div>
 <div id="wrap"><svg id="map"></svg></div>
 <div id="legend"><span>图例:</span><span id="lgbox"></span></div>
-<div class="hint">滚轮缩放 · 拖拽平移 · 点击节点折叠/展开 · 点击视频打开B站</div>
+<div class="hint">滚轮滚动 · Ctrl/滚轮缩放 · 拖拽平移 · 点击节点折叠/展开 · 点击视频打开B站</div>
 <script>
 const DATA = __DATA__;
 (function(){
@@ -1318,6 +1322,38 @@ const DATA = __DATA__;
   }
   const GH = 36, COL = 250, BOXW = 220, X0 = 30, Y0 = 24, GAP = 6;
   let ymap = {};
+  let lastNodes = [];
+  function applyView(){ if (g) g.setAttribute('transform', 'translate('+vp.x+','+vp.y+') scale('+vp.s+')'); }
+  function viewSize(){ return { w: svg.clientWidth || 1200, h: svg.clientHeight || 700 }; }
+  function syncViewBox(){
+    const v = viewSize();
+    svg.setAttribute('viewBox', '0 0 '+v.w+' '+v.h);
+  }
+  function reveal(n){
+    // 展开后把该节点第一个子节点滚动进视野
+    if (!lastNodes.length) return;
+    let firstY = null;
+    for (let i=0;i<lastNodes.length;i++){ if (lastNodes[i].parent === n) { firstY = ymap[lastNodes[i]._k]; break; } }
+    if (firstY === null) return;
+    const v = viewSize();
+    const winBottom = -vp.y/vp.s + v.h/vp.s;
+    if (firstY > winBottom - 60) { vp.y = -(firstY*vp.s) + 80; applyView(); }
+  }
+  function fitView(){
+    if (!lastNodes.length) return;
+    let x1=Infinity, y1=Infinity, x2=-Infinity, y2=-Infinity;
+    lastNodes.forEach(n=>{
+      const h = nodeH(n);
+      x1 = Math.min(x1, X0 + n._depth*COL); y1 = Math.min(y1, ymap[n._k] - h/2);
+      x2 = Math.max(x2, X0 + n._depth*COL + BOXW); y2 = Math.max(y2, ymap[n._k] + h/2);
+    });
+    const v = viewSize();
+    const s = Math.max(0.2, Math.min(v.w/(x2-x1+40), v.h/(y2-y1+40), 1.5));
+    vp.s = s;
+    vp.x = v.w/2 - ((x1+x2)/2)*s;
+    vp.y = v.h/2 - ((y1+y2)/2)*s;
+    applyView();
+  }
   function blend(hex, w){
     const r=parseInt(hex.slice(1,3),16), gg=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
     const f=v=>Math.round(v+(255-v)*w);
@@ -1348,10 +1384,7 @@ const DATA = __DATA__;
     ymap = {};
     let yy = Y0;
     nodes.forEach(n=>{ ymap[n._k] = yy + nodeH(n)/2; yy += nodeH(n) + GAP; });
-    const maxD = Math.max.apply(null, nodes.map(n=>n._depth));
-    const W = X0 + (maxD+1)*COL + 260;
-    const H = Math.max(300, yy + 40);
-    svg.setAttribute('viewBox', '0 0 '+W+' '+H);
+    lastNodes = nodes;
     const links = document.createElementNS(NS,'g');
     const boxes = document.createElementNS(NS,'g');
     g.appendChild(links); g.appendChild(boxes);
@@ -1423,8 +1456,10 @@ const DATA = __DATA__;
         group.appendChild(m);
         group.addEventListener('click', ()=>{
           if (suppressClick) { suppressClick=false; return; }
-          if (collapsed.has(n._k)) collapsed.delete(n._k); else collapsed.add(n._k);
+          const wasCollapsed = collapsed.has(n._k);
+          if (wasCollapsed) collapsed.delete(n._k); else collapsed.add(n._k);
           render();
+          if (wasCollapsed) reveal(n);
         });
       }
       if (matches.has(n._k)) {
@@ -1465,14 +1500,26 @@ const DATA = __DATA__;
     if (!dragging) return;
     const dx = e.clientX - sx, dy = e.clientY - sy;
     if (!moved && Math.abs(dx) + Math.abs(dy) > 4) { moved = true; suppressClick = true; }
-    if (moved) { e.preventDefault(); vp.x = ox + dx; vp.y = oy + dy; if (g) g.setAttribute('transform','translate('+vp.x+','+vp.y+') scale('+vp.s+')'); }
+    if (moved) { e.preventDefault(); vp.x = ox + dx; vp.y = oy + dy; applyView(); }
   });
   window.addEventListener('mouseup', ()=>{ dragging=false; wrap.classList.remove('drag'); });
+  // 滚轮: 默认滚动; Ctrl/Shift+滚轮 = 以鼠标为中心缩放
   wrap.addEventListener('wheel', e=>{
     e.preventDefault();
-    vp.s = Math.min(3, Math.max(0.2, vp.s * (e.deltaY>0 ? 0.9 : 1.1)));
-    if (g) g.setAttribute('transform', 'translate('+vp.x+','+vp.y+') scale('+vp.s+')');
+    if (e.ctrlKey || e.shiftKey) {
+      const v = viewSize();
+      const rect = svg.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const fx = (mx - vp.x)/vp.s, fy = (my - vp.y)/vp.s;
+      const ns = Math.min(3, Math.max(0.2, vp.s * (e.deltaY>0 ? 0.9 : 1.1)));
+      vp.x = mx - fx*ns; vp.y = my - fy*ns; vp.s = ns;
+    } else {
+      vp.y -= e.deltaY;
+    }
+    applyView();
   }, {passive:false});
+  document.getElementById('fit').addEventListener('click', ()=>{ fitView(); });
+  window.addEventListener('resize', ()=>{ syncViewBox(); });
   // 统计与图例
   let vids = 0;
   (function count(n){ if (!n.children || n.children.length===0) vids++; if (n.children) n.children.forEach(count); })(root);
@@ -1488,6 +1535,7 @@ const DATA = __DATA__;
     lg.appendChild(s);
   });
   render();
+  syncViewBox();
 })();
 </script>
 </body>

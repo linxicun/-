@@ -498,6 +498,8 @@ class TestRenderMindmap(BiliTestCase):
         self.assertIn("BV1xx0000077", html_text)
         self.assertIn("GPIO 控制的入门讲解", html_text)  # 内容总结进入简介
         self.assertIn('"dur": "5:00"', html_text)  # 时长被解析
+        self.assertIn('id="fit"', html_text)  # 适应窗口按钮
+        self.assertIn("syncViewBox", html_text)  # 固定视口逻辑
 
 
 class TestAnalyze(BiliTestCase):
